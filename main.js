@@ -40,8 +40,8 @@ function createShader(gl, type, source) {
 
 function render(e) {
   resize(canvas);
-  var x = 2*e.pageX/canvas.width-1;
-  var y = 2*e.pageY/canvas.height-1;
+  var x = 2*e.clientX/canvas.width-1;
+  var y = 2*e.clientY/canvas.height-1;
   gl.uniform2fv(cLoc, [x, y]);
   gl.drawArrays(primitiveType, offset, count);
 }
