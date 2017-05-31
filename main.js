@@ -1,4 +1,3 @@
-
 function createProgram(gl, vertexShader, fragmentShader) {
   var program = gl.createProgram();
   gl.attachShader(program, vertexShader);
@@ -49,7 +48,14 @@ function render(e) {
 
 var canvas = document.getElementById("gameCanvas");
 canvas.addEventListener("mousemove", render);
-canvas.addEventListener("touchmove", render);
+canvas.addEventListener("touchmove", function (e) {
+  var touch = e.touches[0];
+  var mouseEvent = new MouseEvent("mousemove", {
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  });
+  canvas.dispatchEvent(mouseEvent);
+});
 var webgl_ver = -1;
 var gl = canvas.getContext("webgl2");
 if (!gl) {
