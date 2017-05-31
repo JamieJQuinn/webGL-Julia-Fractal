@@ -70,8 +70,6 @@ if (!gl) {
   webgl_ver = 2;
 }
 
-var force_webgl_1 = true;
-
 if (webgl_ver == 2) {
   var vertexShaderSrc = `#version 300 es
   in vec4 a_pos;
@@ -96,7 +94,7 @@ if (webgl_ver == 2) {
     vec2 z = vec2(v_pos.x, v_pos.y)*1.5;
     float count = 0.0;
     float temp = 0.0;
-    float max_iter = 50.0;
+    float max_iter = 40.0;
     while (length(z) < 2.0 && count < max_iter) {
       temp = z.x;
       z.x = z.x*z.x - z.y*z.y + u_c.x;
@@ -104,9 +102,9 @@ if (webgl_ver == 2) {
       count += 1.0;
     }
     if (length(z) > 2.0) {
-      outColour = vec4(count/max_iter, 0, 0, 1);
+      outColour = vec4(0, count/max_iter, count/max_iter, 1);
     } else {
-      outColour = vec4(0, 0, 0, 1);
+      outColour = vec4(1, 1, 1, 1);
     }
   }
   `;
