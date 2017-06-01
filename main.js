@@ -11,6 +11,19 @@ function createProgram(gl, vertexShader, fragmentShader) {
   gl.deleteProgram(program);
 }
 
+function hexToRGB(hex){
+  var c;
+  if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+    c= hex.substring(1).split('');
+    if(c.length== 3){
+      c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+    }
+    c= '0x'+c.join('');
+    return [(c>>16)&255, (c>>8)&255, c&255];
+  }
+  throw new Error('Bad Hex');
+}
+
 function resize(canvas) {
   // Lookup the size the browser is displaying the canvas.
   var displayWidth  = canvas.clientWidth;
@@ -40,15 +53,34 @@ function createShader(gl, type, source) {
 
 function render(e) {
   resize(canvas);
-  var x = 2*e.clientX/canvas.width-1;
-  var y = 2*e.clientY/canvas.height-1;
+  var x = 2*(e.clientX-canvas.offsetLeft)/canvas.width-1;
+  var y = 2*(e.clientY-canvas.offsetTop)/canvas.height-1;
   gl.uniform2fv(cLoc, [x, y]);
+  gl.uniform1f(aspectLoc, aspect_ratio);
+  var c = hexToRGB(colour);
+  var c2 = hexToRGB(inner_colour);
+  gl.uniform3fv(colourLoc, [c[0]/255, c[1]/255, c[2]/255]);
+  if (match_colours) {
+    gl.uniform3fv(inner_colourLoc, [c[0]/255, c[1]/255, c[2]/255]);
+  } else {
+    gl.uniform3fv(inner_colourLoc, [c2[0]/255, c2[1]/255, c2[2]/255]);
+  }
   gl.drawArrays(primitiveType, offset, count);
 }
 
 var canvas = document.getElementById("gameCanvas");
-canvas.addEventListener("mousemove", render);
-canvas.addEventListener("touchmove", function (e) {
+//var size = Math.min(window.innerWidth, window.innerHeight)*1.5;
+//canvas.width = size;
+//canvas.height = size;
+//size = Math.min(window.innerWidth, window.innerHeight) - 50;
+//canvas.style.width = size.toString() + "px";
+//canvas.style.height = size.toString() + "px";
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+var aspect_ratio = canvas.width/canvas.height;
+
+document.body.addEventListener("mousemove", render);
+document.body.addEventListener("touchmove", function (e) {
   var touch = e.touches[0];
   var mouseEvent = new MouseEvent("mousemove", {
     clientX: touch.clientX,
@@ -56,6 +88,27 @@ canvas.addEventListener("touchmove", function (e) {
   });
   canvas.dispatchEvent(mouseEvent);
 });
+
+
+var colour = "#76FEFE";
+var inner_colour = "#76FEFE";
+var match_colours = true;
+document.body.style.backgroundColor = "#000"
+
+QuickSettings.useExtStyleSheet();
+var settings = QuickSettings.create(5, 5, "Settings ('s' to hide)");
+settings.addColor("Colour", colour, function(c) {
+  colour = c;
+});
+settings.addColor("Inner Colour", inner_colour, function(c) {
+  inner_colour = c;
+});
+settings.addBoolean("Match Colours", match_colours, function(in_match_colours) {
+  console.log(in_match_colours);
+  match_colours = in_match_colours;
+});
+settings.setKey("s");
+
 var webgl_ver = -1;
 var gl = canvas.getContext("webgl2");
 if (!gl) {
@@ -69,6 +122,8 @@ if (!gl) {
 } else {
   webgl_ver = 2;
 }
+
+webgl_ver = 1;
 
 if (webgl_ver == 2) {
   var vertexShaderSrc = `#version 300 es
@@ -87,24 +142,27 @@ if (webgl_ver == 2) {
 
   in vec4 v_pos;
   uniform vec2 u_c;
+  uniform vec3 colour;
+  uniform vec3 inner_colour;
+  uniform float aspect_ratio;
 
   out vec4 outColour;
 
   void main() {
-    vec2 z = vec2(v_pos.x, v_pos.y)*1.5;
+    vec2 z = vec2(v_pos.x*aspect_ratio, v_pos.y)*1.5;
     float count = 0.0;
     float temp = 0.0;
     float max_iter = 40.0;
     while (length(z) < 2.0 && count < max_iter) {
       temp = z.x;
-      z.x = z.x*z.x - z.y*z.y + u_c.x;
+      z.x = z.x*z.x - z.y*z.y + u_c.x*aspect_ratio;
       z.y = 2.0*z.y*temp + u_c.y;
       count += 1.0;
     }
     if (length(z) > 2.0) {
-      outColour = vec4(0, count/max_iter, count/max_iter, 1);
+      outColour = vec4(colour.x*count/max_iter, colour.y*count/max_iter, colour.z*count/max_iter, 1);
     } else {
-      outColour = vec4(1, 1, 1, 1);
+      gl_FragColor = vec4(inner_colour.r,inner_colour.g ,inner_colour.b, 1);
     }
   }
   `;
@@ -152,7 +210,10 @@ if (webgl_ver == 2) {
   var count = 6;
 
   var cLoc = gl.getUniformLocation(program, "u_c");
-} else if (webgl_ver == 1 || force_webgl_1) {
+  var colourLoc = gl.getUniformLocation(program, "colour");
+  var aspectLoc = gl.getUniformLocation(program, "aspect_ratio");
+  var inner_colourLoc = gl.getUniformLocation(program, "inner_colour");
+} else if (webgl_ver == 1) {
   var vertexShaderSrc = `
   attribute vec4 a_pos;
 
@@ -169,22 +230,26 @@ if (webgl_ver == 2) {
 
   varying vec4 v_pos;
   uniform vec2 u_c;
+  uniform vec3 colour;
+  uniform vec3 inner_colour;
+  uniform float aspect_ratio;
 
   void main() {
-    vec2 z = vec2(v_pos.x, v_pos.y)*1.5;
-    float count = 0.0;
+    vec2 z = vec2(v_pos.x*aspect_ratio, v_pos.y)*1.5;
     float temp = 0.0;
     float max_iter = 50.0;
-    while (length(z) < 2.0 && count < max_iter) {
+    float count = 0.0;
+    for(int i = 0; i < 50; ++i) {
       temp = z.x;
-      z.x = z.x*z.x - z.y*z.y + u_c.x;
+      z.x = z.x*z.x - z.y*z.y + u_c.x*aspect_ratio;
       z.y = 2.0*z.y*temp + u_c.y;
+      if (length(z) > 2.0) {break;}
       count += 1.0;
     }
     if (length(z) > 2.0) {
-      gl_FragColor = vec4(count/max_iter, 0, 0, 1);
+      gl_FragColor = vec4(colour.r*float(count)/max_iter, colour.g*float(count)/max_iter, colour.b*float(count)/max_iter, 1);
     } else {
-      gl_FragColor = vec4(0, 0, 0, 1);
+      gl_FragColor = vec4(inner_colour.r,inner_colour.g ,inner_colour.b, 1);
     }
   }
   `;
@@ -229,6 +294,9 @@ if (webgl_ver == 2) {
   var count = 6;
 
   var cLoc = gl.getUniformLocation(program, "u_c");
+  var colourLoc = gl.getUniformLocation(program, "colour");
+  var inner_colourLoc = gl.getUniformLocation(program, "inner_colour");
+  var aspectLoc = gl.getUniformLocation(program, "aspect_ratio");
 } else {
   console.log("Cannot run");
 }
